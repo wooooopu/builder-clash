@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>築跡交鋒 (方塊領域) - 單機網頁版</title>
+  
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 FontAwesome 圖示 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      color: #f8fafc;
+      overflow-x: hidden;
+    }
+
+    /* 玻璃擬態質感面板 */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    /* 遊戲棋盤格與漸層 */
+    .board-container {
+      background: #1e293b;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 0 30px rgba(0,0,0,0.5);
+      border: 4px solid #334155;
+      position: relative;
+    }
+    
+    .game-cell {
+      position: relative;
+      background-color: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: default;
+      transition: all 0.2s;
+    }
+
+    .game-cell:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* 玩家底線標示 */
+    .baseline-p1 { background: rgba(59, 130, 246, 0.1); }
+    .baseline-p2 { background: rgba(239, 68, 68, 0.1); }
+
+    /* 高質感立體棋子 */
+    .player-piece {
+      width: 75%;
+      height: 75%;
+      border-radius: 50%;
+      position: absolute;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 0.8rem;
+      color: white;
+      text-shadow: 0px 1px 2px rgba(0,0,0,0.8);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.4);
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .player-p1 {
+      background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb, #1e3a8a);
+      border: 2px solid #93c5fd;
+    }
+    .player-p2 {
+      background: radial-gradient(circle at 30% 30%, #f87171, #dc2626, #7f1d1d);
+      border: 2px solid #fca5a5;
+    }
+
+    /* 建築物方塊設計 */
+    .building-block {
+      position: absolute;
+      inset: 1px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.4);
+      z-index: 20;
+    }
+    .building-p1 {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      border: 2px solid #1e3a8a;
+    }
+    .building-p2 {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      border: 2px solid #7f1d1d;
+    }
+    .building-lv4 {
+      box-shadow: 0 0 15px #fbbf24, inset 0 0 10px rgba(255,255,255,0.5);
+      border: 2px solid #fcd34d;
+      animation: lv4Pulse 2s infinite;
+    }
+
+    /* 建築物發光特效 */
+    @keyframes lv4Pulse {
+      0% { box-shadow: 0 0 10px #fbbf24; }
+      50% { box-shadow: 0 0 20px #fbbf24, inset 0 0 15px rgba(255,255,255,0.6); }
+      100% { box-shadow: 0 0 10px #fbbf24; }
+    }
+
+    /* 格子高亮狀態提示 */
+    .highlight-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      opacity: 0.6;
+      border-radius: 2px;
+      animation: pulse 1.5s infinite;
+      cursor: pointer;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+      100% { opacity: 0.4; }
+    }
+    .highlight-setup-p1 { background-color: #60a5fa; box-shadow: inset 0 0 0 3px #2563eb; }
+    .highlight-setup-p2 { background-color: #f87171; box-shadow: inset 0 0 0 3px #dc2626; }
+    .highlight-move { background-color: #34d399; box-shadow: inset 0 0 0 3px #10b981; }
+    .highlight-destroy { background-color: #fb923c; box-shadow: inset 0 0 0 3px #ea580c; }
+    .highlight-build-new { background-color: #fcd34d; box-shadow: inset 0 0 0 3px #d97706; }
+    .highlight-build-own { background-color: #a78bfa; box-shadow: inset 0 0 0 4px #7c3aed; }
+    .highlight-combine { background-color: #e879f9; box-shadow: inset 0 0 0 3px #c026d3; }
+    .highlight-ultimate { background-color: #ef4444; box-shadow: inset 0 0 0 4px #991b1b; animation: pulse 0.5s infinite; }
+
+    /* 準備建造中的狀態 */
+    .pending-new {
+      position: absolute;
+      inset: 3px;
+      background-color: rgba(251, 191, 36, 0.8);
+      border: 2px dashed #d97706;
+      z-index: 25;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: bold; border-radius: 4px;
+    }
+    .pending-existing {
+      position: absolute;
+      inset: 0;
+      border: 4px solid #a78bfa;
+      background-color: rgba(167, 139, 250, 0.5);
+      z-index: 30;
+      pointer-events: none;
+    }
+
+    /* 骰子動畫 */
+    .dice {
+      transition: transform 0.3s;
+    }
+    .rolling {
+      animation: rollAnim 0.5s linear infinite;
+    }
+    @keyframes rollAnim {
+      0% { transform: rotate(0deg) scale(1); }
+      50% { transform: rotate(180deg) scale(1.1); }
+      100% { transform: rotate(360deg) scale(1); }
+    }
+
+    /* 按鈕樣式美化 */
+    .btn-action {
+      transition: all 0.2s;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    .btn-action:active:not(:disabled) {
+      transform: translateY(2px);
+      box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    }
+    .btn-action:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-6 px-4">
+
+  <!-- 玩家名稱輸入彈出層 -->
+  <div id="name-input-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md">
+    <div class="glass-panel p-8 rounded-2xl w-full max-w-md flex flex-col gap-6 text-center shadow-2xl border border-slate-600/50">
+      <h2 class="text-3xl font-black text-white drop-shadow-lg mb-2">築跡交鋒</h2>
+      <p class="text-slate-300 text-sm mb-4">請輸入雙方玩家的名稱以開始遊戲</p>
+      
+      <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-2">
+          <label class="text-blue-400 font-bold text-left pl-2"><i class="fa-solid fa-user"></i> 玩家 1 (藍方)</label>
+          <input id="input-p1-name" type="text" placeholder="預設: 玩家 1" class="w-full bg-slate-800/80 border border-blue-500/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 transition-all">
+        </div>
+        
+        <div class="flex flex-col gap-2">
+          <label class="text-red-400 font-bold text-left pl-2"><i class="fa-solid fa-user"></i> 玩家 2 (紅方)</label>
+          <input id="input-p2-name" type="text" placeholder="預設: 玩家 2" class="w-full bg-slate-800/80 border border-red-500/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500/30 transition-all">
+        </div>
+      </div>
+      
+      <button onclick="startGame()" class="btn-action w-full py-3 mt-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xl shadow-lg border border-indigo-400/30">
+        開始遊戲
+      </button>
+    </div>
+  </div>
+
+  <!-- 遊戲標題 -->
+  <header class="mb-8 text-center">
+    <h1 class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 tracking-wider drop-shadow-lg flex items-center justify-center gap-3">
+      <i class="fa-solid fa-chess-board text-blue-400"></i>
+      築跡交鋒
+    </h1>
+    <p class="text-slate-300 mt-2 font-medium tracking-widest text-sm bg-slate-800/50 inline-block px-4 py-1 rounded-full border border-slate-600">
+      方塊領域 WEB-REMASTERED
+    </p>
+  </header>
+
+  <div class="flex flex-col lg:flex-row gap-8 items-start w-full max-w-6xl justify-center relative">
+    
+    <!-- 左側：遊戲棋盤 -->
+    <div class="flex-shrink-0 w-full max-w-[500px] mx-auto lg:mx-0">
+      <div class="glass-panel p-3 rounded-2xl relative">
+        <div id="board" class="board-container grid rounded-xl overflow-hidden" 
+             style="grid-template-columns: repeat(10, 1fr); width: 100%; aspect-ratio: 1/1;">
+          <!-- JS 將動態生成棋盤格 -->
+        </div>
+        <!-- 裝飾用光暈 -->
+        <div class="absolute -top-10 -left-10 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-[50px] opacity-20 pointer-events-none"></div>
+        <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-red-500 rounded-full mix-blend-screen filter blur-[50px] opacity-20 pointer-events-none"></div>
+      </div>
+    </div>
+
+    <!-- 右側：控制面板與規則 -->
+    <div class="flex flex-col gap-6 w-full max-w-[400px] mx-auto lg:mx-0">
+      
+      <!-- 動態控制面板 -->
+      <div id="controls-panel" class="glass-panel rounded-2xl p-6 relative overflow-hidden flex flex-col gap-4">
+        <!-- 頂部陣營指示條 -->
+        <div id="turn-indicator-bar" class="absolute top-0 left-0 w-full h-2 bg-gray-500"></div>
+        
+        <!-- 面板內容將由 JS 渲染 -->
+        <div id="controls-content"></div>
+      </div>
+
+      <!-- 規則摘要 -->
+      <div class="glass-panel rounded-2xl p-5 text-sm text-slate-300 border border-slate-700/50">
+        <h3 class="font-bold text-white mb-3 text-base flex items-center gap-2">
+          <i class="fa-solid fa-book text-yellow-400"></i> 簡易規則摘要
+        </h3>
+        <ul class="list-disc pl-5 space-y-2 opacity-80">
+          <li><strong class="text-cyan-300">開局：</strong>選擇己方底線任一空地出發。</li>
+          <li><strong class="text-cyan-300">精準移動：</strong>移動時<span class="text-red-400 font-bold">必須走滿</span>骰出的步數，且終點必須是空地，無法中途停在建築上。</li>
+          <li><strong class="text-cyan-300">建設與升級：</strong>每回合可建設並重組1次。蓋出多格建築，或將舊建築拆分合體，上限為 Lv4 (發光建築)。</li>
+          <li><strong class="text-cyan-300">拆除與合力：</strong>可選擇拆除(建築骰≧敵方建築)，或放棄移動發動合力一擊(雙骰總和≧敵方建築)。</li>
+          <li><strong class="text-yellow-400">終極破壞：</strong>率先抵達敵方底線，可無條件拔除一棟敵方建築！隨後結算總面積分數。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // === 遊戲常數 ===
+    const BOARD_SIZE = 10;
+    const DIRS_8 = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+    const DIRS_4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    const DICE_FACES = [1, 1, 1, 2, 2, 3];
+
+    // === 遊戲全局狀態 ===
+    let state = {
+      playerNames: { p1: '玩家 1', p2: '玩家 2' },
+      p1Pos: null,
+      p2Pos: null,
+      buildings: [], // { id, owner, cells: [{r, c}] }
+      turn: 1,
+      phase: 'NAME_INPUT', // NAME_INPUT, SETUP_P1, SETUP_P2, ROLL, CHOOSE_PHASE, MOVE, ACTION_SELECT, ACTION_EXECUTE, ULTIMATE_DESTROY, GAME_OVER
+      dice: { walk: 0, build: 0 },
+      remainingSteps: 0,
+      actionType: null, // BUILD, REORGANIZE, DESTROY, COMBINE
+      usedMainAction: false,
+      usedUpgrade: false,
+      pendingBuild: { new: [], existing: [] },
+      isRolling: false,
+      winner: null,
+      scores: { p1: 0, p2: 0 }
+    };
+
+    // === 輔助函式 ===
+    function rollDiceVal() {
+      return DICE_FACES[Math.floor(Math.random() * DICE_FACES.length)];
+    }
+
+    function getBuilding(r, c) {
+      return state.buildings.find(b => b.cells.some(cell => cell.r === r && cell.c === c));
+    }
+
+    function isPlayerAt(r, c) {
+      return (state.p1Pos && state.p1Pos.r === r && state.p1Pos.c === c) || 
+             (state.p2Pos && state.p2Pos.r === r && state.p2Pos.c === c);
+    }
+
+    function isEmpty(r, c) {
+      return !getBuilding(r, c) && !isPlayerAt(r, c);
+    }
+
+    function isCellEmptyForMe(r, c) {
+      if (getBuilding(r, c)) return false;
+      const opponentPos = state.turn === 1 ? state.p2Pos : state.p1Pos;
+      if (opponentPos && opponentPos.r === r && opponentPos.c === c) return false;
+      return true;
+    }
+
+    function isCellPassableForMe(r, c) {
+      const b = getBuilding(r, c);
+      if (b && b.owner !== state.turn) return false; // 無法經過敵方建築
+      const opponentPos = state.turn === 1 ? state.p2Pos : state.p1Pos;
+      if (opponentPos && opponentPos.r === r && opponentPos.c === c) return false; // 無法踩在敵人身上
+      return true;
+    }
+
+    function isValidPos(r, c) {
+      return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
+    }
+
+    // 計算連通區塊 (用來切割被拆分的建築)
+    function getConnectedComponents(cells) {
+      const comps = [];
+      const unvisited = new Set(cells.map(c => `${c.r},${c.c}`));
+      const cellMap = {};
+      cells.forEach(c => cellMap[`${c.r},${c.c}`] = c);
+      
+      while(unvisited.size > 0) {
+        const startKey = unvisited.values().next().value;
+        const queue = [startKey];
+        const currentComp = [];
+        unvisited.delete(startKey);
+        
+        while(queue.length > 0) {
+          const curr = queue.shift();
+          currentComp.push(cellMap[curr]);
+          
+          const [r, c] = curr.split(',').map(Number);
+          DIRS_4.forEach(([dr, dc]) => {
+            const nr = r + dr, nc = c + dc;
+            const nKey = `${nr},${nc}`;
+            if (unvisited.has(nKey)) {
+              unvisited.delete(nKey);
+              queue.push(nKey);
+            }
+          });
+        }
+        comps.push(currentComp);
+      }
+      return comps;
+    }
+
+
+    // 取得合法移動 (需保證走滿步數且終點空置)
+    function getValidMoves() {
+      if (state.phase !== 'MOVE' || state.remainingSteps <= 0) return [];
+      const currentPlayerPos = state.turn === 1 ? state.p1Pos : state.p2Pos;
+      if (!currentPlayerPos) return [];
+
+      const validNextSteps = [];
+      const startR = currentPlayerPos.r;
+      const startC = currentPlayerPos.c;
+
+      // DFS 尋找路線
+      const canReachEmptyExact = (currR, currC, stepsLeft, visited) => {
+        // 若提早抵達終點線 (不論剩幾步)，可視為合法終點
+        const isWinCell = (state.turn === 1 && currR === 0) || (state.turn === 2 && currR === BOARD_SIZE - 1);
+        if (isWinCell && isCellEmptyForMe(currR, currC)) return true;
+        
+        // 走滿步數且是空地
+        if (stepsLeft === 0) return isCellEmptyForMe(currR, currC);
+
+        for (const [dr, dc] of DIRS_8) {
+          const nr = currR + dr, nc = currC + dc;
+          const key = `${nr},${nc}`;
+          if (isValidPos(nr, nc) && !visited.has(key)) {
+            if (isCellPassableForMe(nr, nc)) {
+              visited.add(key);
+              if (canReachEmptyExact(nr, nc, stepsLeft - 1, visited)) return true;
+              visited.delete(key);
+            }
+          }
+        }
+        return false;
+      };
+
+      DIRS_8.forEach(([dr, dc]) => {
+        const nr = startR + dr, nc = startC + dc;
+        if (isValidPos(nr, nc) && isCellPassableForMe(nr, nc)) {
+          const visited = new Set([`${startR},${startC}`, `${nr},${nc}`]);
+          if (canReachEmptyExact(nr, nc, state.remainingSteps - 1, visited)) {
+            validNextSteps.push({ r: nr, c: nc });
+          }
+        }
+      });
+      return validNextSteps;
+    }
+
+    function getPendingBuildCells() {
+      return [...state.pendingBuild.new, ...state.pendingBuild.existing];
+    }
+
+    // 取得可摧毀與結合的目標
+    function getActionSpots(type) {
+      const currentPlayerPos = state.turn === 1 ? state.p1Pos : state.p2Pos;
+      if (!currentPlayerPos) return [];
+      const spots = [];
+
+      if (type === 'DESTROY' && state.actionType === 'DESTROY') {
+        state.buildings.filter(b => b.owner !== state.turn && b.cells.length <= state.dice.build).forEach(b => {
+          if (b.cells.some(c => Math.abs(c.r - currentPlayerPos.r) + Math.abs(c.c - currentPlayerPos.c) === 1)) {
+            b.cells.forEach(c => spots.push(c));
+          }
+        });
+      } else if (type === 'COMBINE' && state.actionType === 'COMBINE') {
+        const power = state.dice.walk + state.dice.build;
+        state.buildings.filter(b => b.owner !== state.turn && b.cells.length <= power).forEach(b => {
+          if (b.cells.some(c => Math.abs(c.r - currentPlayerPos.r) + Math.abs(c.c - currentPlayerPos.c) === 1)) {
+            b.cells.forEach(c => spots.push(c));
+          }
+        });
+      }
+      return spots;
+    }
+
+    function canCombineAction() {
+      const currentPlayerPos = state.turn === 1 ? state.p1Pos : state.p2Pos;
+      if (!currentPlayerPos) return false;
+      const power = state.dice.walk + state.dice.build;
+      return state.buildings.some(b => b.owner !== state.turn && b.cells.length <= power && 
+             b.cells.some(c => Math.abs(c.r - currentPlayerPos.r) + Math.abs(c.c - currentPlayerPos.c) === 1));
+    }
+
+    // 取得建設與重組的候選格子
+    function getBuildCandidates() {
+      const currentPlayerPos = state.turn === 1 ? state.p1Pos : state.p2Pos;
+      if (!currentPlayerPos || (state.actionType !== 'BUILD' && state.actionType !== 'REORGANIZE')) return { empty: [], own: [] };
+      
+      const selected = getPendingBuildCells();
+      const currentSize = selected.length;
+      const emptyCandidates = [];
+      const ownCandidates = [];
+      
+      if (currentSize >= 4) return { empty: [], own: [] };
+      
+      const canAddNew = state.actionType === 'BUILD' && state.pendingBuild.new.length < state.dice.build;
+      const isSelected = (r, c) => selected.some(s => s.r === r && s.c === c);
+      
+      const checkAndAdd = (r, c) => {
+        if (!isValidPos(r, c) || isSelected(r, c)) return;
+        
+        let willBeSize4 = currentSize === 3;
+        if (willBeSize4) {
+          const lv4Building = state.buildings.find(b => b.owner === state.turn && b.cells.length === 4);
+          if (lv4Building) {
+            const alreadyDismantling = state.pendingBuild.existing.some(ec => 
+              lv4Building.cells.some(lc => lc.r === ec.r && lc.c === ec.c)
+            );
+            const isNewCellFromLv4 = lv4Building.cells.some(lc => lc.r === r && lc.c === c);
+            if (!alreadyDismantling && !isNewCellFromLv4) return; 
+          }
+        }
+        
+        if (isEmpty(r, c) && canAddNew) {
+          if (!emptyCandidates.some(s => s.r === r && s.c === c)) emptyCandidates.push({r, c});
+        }
+        const b = getBuilding(r, c);
+        if (b && b.owner === state.turn) {
+          if (!ownCandidates.some(s => s.r === r && s.c === c)) ownCandidates.push({r, c});
+        }
+      };
+      
+      if (currentSize === 0) {
+        DIRS_4.forEach(([dr, dc]) => checkAndAdd(currentPlayerPos.r + dr, currentPlayerPos.c + dc));
+      } else {
+        selected.forEach(cell => {
+          DIRS_4.forEach(([dr, dc]) => checkAndAdd(cell.r + dr, cell.c + dc));
+        });
+      }
+      return { empty: emptyCandidates, own: ownCandidates };
+    }
+
+    function finalizeBuildOrReorganize() {
+      const selected = getPendingBuildCells();
+      if (selected.length === 0) return;
+      
+      let nextBuildings = [...state.buildings];
+      const existingSet = new Set(state.pendingBuild.existing.map(c => `${c.r},${c.c}`));
+      const touchedIds = new Set();
+      
+      state.pendingBuild.existing.forEach(c => {
+          const b = getBuilding(c.r, c.c);
+          if (b) touchedIds.add(b.id);
+      });
+      
+      touchedIds.forEach(id => {
+          const b = nextBuildings.find(x => x.id === id);
+          if (!b) return;
+          const remaining = b.cells.filter(c => !existingSet.has(`${c.r},${c.c}`));
+          nextBuildings = nextBuildings.filter(x => x.id !== id);
+          if (remaining.length > 0) {
+              const comps = getConnectedComponents(remaining);
+              comps.forEach(comp => {
+                  nextBuildings.push({ id: Date.now() + Math.random(), owner: state.turn, cells: comp });
+              });
+          }
+      });
+      
+      nextBuildings.push({ id: Date.now(), owner: state.turn, cells: selected });
+      state.buildings = nextBuildings;
+      state.pendingBuild = { new: [], existing: [] };
+      
+      if (state.actionType === 'BUILD') state.usedMainAction = true;
+      if (state.actionType === 'REORGANIZE') state.usedUpgrade = true;
+      
+      state.phase = 'ACTION_SELECT';
+      state.actionType = null;
+      renderApp();
+    }
+
+    function calculateScores() {
+      state.scores = { p1: 0, p2: 0 };
+      state.buildings.forEach(b => {
+        if (b.owner === 1) state.scores.p1 += b.cells.length;
+        if (b.owner === 2) state.scores.p2 += b.cells.length;
+      });
+      if (state.scores.p1 > state.scores.p2) state.winner = 1;
+      else if (state.scores.p2 > state.scores.p1) state.winner = 2;
+      else state.winner = 0;
+      state.phase = 'GAME_OVER';
+      renderApp();
+    }
+
+    function endTurn() {
+      state.turn = state.turn === 1 ? 2 : 1;
+      state.phase = 'ROLL';
+      state.actionType = null;
+      state.pendingBuild = { new: [], existing: [] };
+      state.remainingSteps = 0;
+      state.usedMainAction = false;
+      state.usedUpgrade = false;
+      renderApp();
+    }
+
+    function handleCellClick(r, c) {
+      const isMatch = (spots) => spots.some(s => s.r === r && s.c === c);
+      const validMoves = getValidMoves();
+      const validDestroy = getActionSpots('DESTROY');
+      const validCombine = getActionSpots('COMBINE');
+      const buildCands = getBuildCandidates();
+
+      if (state.phase === 'SETUP_P1' && r === BOARD_SIZE - 1 && isEmpty(r, c)) {
+        state.p1Pos = { r, c };
+        state.phase = 'SETUP_P2';
+      }
+      else if (state.phase === 'SETUP_P2' && r === 0 && isEmpty(r, c)) {
+        state.p2Pos = { r, c };
+        state.phase = 'ROLL';
+      }
+      else if (state.phase === 'MOVE' && isMatch(validMoves)) {
+        if (state.turn === 1) state.p1Pos = { r, c };
+        else state.p2Pos = { r, c };
+
+        const isWin = (state.turn === 1 && r === 0) || (state.turn === 2 && r === BOARD_SIZE - 1);
+        if (isWin) {
+          state.phase = 'ULTIMATE_DESTROY';
+        } else {
+          state.remainingSteps -= 1;
+          if (state.remainingSteps === 0) {
+            state.phase = 'ACTION_SELECT';
+          }
+        }
+      } 
+      else if (state.phase === 'ULTIMATE_DESTROY') {
+        const targetB = getBuilding(r, c);
+        if (targetB && targetB.owner !== state.turn) {
+          state.buildings = state.buildings.filter(b => b.id !== targetB.id);
+          setTimeout(() => calculateScores(), 100);
+        }
+      }
+      else if (state.phase === 'ACTION_EXECUTE') {
+        if (state.actionType === 'BUILD' || state.actionType === 'REORGANIZE') {
+          if (buildCands.empty.some(s => s.r === r && s.c === c)) {
+            state.pendingBuild.new.push({r, c});
+          } else if (buildCands.own.some(s => s.r === r && s.c === c)) {
+            state.pendingBuild.existing.push({r, c});
+          }
+        } 
+        else if (state.actionType === 'DESTROY' && isMatch(validDestroy)) {
+          const targetId = getBuilding(r, c).id;
+          state.buildings = state.buildings.filter(b => b.id !== targetId);
+          state.usedMainAction = true;
+          state.phase = 'ACTION_SELECT';
+          state.actionType = null;
+        }
+        else if (state.actionType === 'COMBINE' && isMatch(validCombine)) {
+          const targetId = getBuilding(r, c).id;
+          state.buildings = state.buildings.filter(b => b.id !== targetId);
+          endTurn();
+        }
+      }
+      renderApp();
+    }
+
+    // === 事件委派 ===
+    document.getElementById('board').addEventListener('click', (e) => {
+      const cell = e.target.closest('.game-cell');
+      if (cell) {
+        handleCellClick(parseInt(cell.dataset.r), parseInt(cell.dataset.c));
+      }
+    });
+
+    function renderBoard() {
+      const boardEl = document.getElementById('board');
+      let html = '';
+      
+      const validMoves = getValidMoves();
+      const validDestroy = getActionSpots('DESTROY');
+      const validCombine = getActionSpots('COMBINE');
+      const buildCands = getBuildCandidates();
+      
+      for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
+        const r = Math.floor(i / BOARD_SIZE);
+        const c = i % BOARD_SIZE;
+        
+        const isP1 = state.p1Pos && state.p1Pos.r === r && state.p1Pos.c === c;
+        const isP2 = state.p2Pos && state.p2Pos.r === r && state.p2Pos.c === c;
+        const building = getBuilding(r, c);
+        const isPendingNew = state.pendingBuild.new.some(p => p.r === r && p.c === c);
+        const isPendingExisting = state.pendingBuild.existing.some(p => p.r === r && p.c === c);
+        
+        let hlClass = '';
+        if (state.phase === 'SETUP_P1' && r === BOARD_SIZE - 1 && isEmpty(r, c)) hlClass = 'highlight-setup-p1';
+        if (state.phase === 'SETUP_P2' && r === 0 && isEmpty(r, c)) hlClass = 'highlight-setup-p2';
+        if (state.phase === 'MOVE' && validMoves.some(m => m.r === r && m.c === c)) hlClass = 'highlight-move';
+        if (state.phase === 'ULTIMATE_DESTROY' && building && building.owner !== state.turn) hlClass = 'highlight-ultimate';
+        
+        if (state.phase === 'ACTION_EXECUTE') {
+          if ((state.actionType === 'BUILD' || state.actionType === 'REORGANIZE') && buildCands.empty.some(s => s.r === r && s.c === c)) hlClass = 'highlight-build-new';
+          if ((state.actionType === 'BUILD' || state.actionType === 'REORGANIZE') && buildCands.own.some(s => s.r === r && s.c === c)) hlClass = 'highlight-build-own';
+          if (state.actionType === 'DESTROY' && validDestroy.some(s => s.r === r && s.c === c)) hlClass = 'highlight-destroy';
+          if (state.actionType === 'COMBINE' && validCombine.some(s => s.r === r && s.c === c)) hlClass = 'highlight-combine';
+        }
+
+        let baseBg = r === 0 ? 'baseline-p1' : (r === BOARD_SIZE - 1 ? 'baseline-p2' : '');
+
+        let cellContent = '';
+        if (hlClass) cellContent += `<div class="highlight-overlay ${hlClass}"></div>`;
+        if (isPendingNew) cellContent += `<div class="pending-new text-white shadow-sm">建</div>`;
+        if (isPendingExisting) cellContent += `<div class="pending-existing"></div>`;
+        
+        if (building && !isPendingNew) {
+          const bClass = building.owner === 1 ? 'building-p1' : 'building-p2';
+          const bLvClass = building.cells.length === 4 ? 'building-lv4 z-30' : 'z-20';
+          const isAnchor = building.cells[0].r === r && building.cells[0].c === c;
+          
+          cellContent += `<div class="building-block ${bClass} ${bLvClass}">`;
+          if (isAnchor) {
+            cellContent += `<span class="text-white font-bold text-lg drop-shadow-md z-40 pointer-events-none">${building.cells.length === 4 ? '<i class="fa-solid fa-star text-yellow-300"></i>' : building.cells.length}</span>`;
+          }
+          cellContent += `</div>`;
+        }
+
+        if (isP1) cellContent += `<div class="player-piece player-p1">${state.playerNames.p1.substring(0, 2)}</div>`;
+        if (isP2) cellContent += `<div class="player-piece player-p2">${state.playerNames.p2.substring(0, 2)}</div>`;
+
+        html += `<div class="game-cell ${baseBg}" data-r="${r}" data-c="${c}">${cellContent}</div>`;
+      }
+      boardEl.innerHTML = html;
+    }
+
+    function renderControls() {
+      const pThemeColor = state.turn === 1 ? '#3b82f6' : '#ef4444';
+      const pThemeBg = state.turn === 1 ? 'bg-blue-600 hover:bg-blue-500' : 'bg-red-600 hover:bg-red-500';
+      const pThemeText = state.turn === 1 ? 'text-blue-400' : 'text-red-400';
+      
+      document.getElementById('turn-indicator-bar').style.backgroundColor = pThemeColor;
+      const cPanel = document.getElementById('controls-content');
+
+      if (state.phase === 'NAME_INPUT') {
+        cPanel.innerHTML = `
+          <div class="text-center py-10">
+            <i class="fa-solid fa-spinner fa-spin text-4xl text-slate-500 mb-4"></i>
+            <p class="text-slate-400 font-bold tracking-widest">等待玩家設定名稱...</p>
+          </div>
+        `;
+        return;
+      }
+      
+      if (state.phase === 'GAME_OVER') {
+        cPanel.innerHTML = `
+          <div class="text-center animate-pulse mt-2 mb-4"><i class="fa-solid fa-trophy text-5xl text-yellow-400"></i></div>
+          <h2 class="text-3xl font-black text-center text-white drop-shadow-lg mb-2">遊戲結束</h2>
+          <div class="bg-blue-900/40 border border-blue-500/30 p-4 rounded-xl flex justify-between items-center mb-2">
+            <span class="font-bold text-blue-300"><i class="fa-solid fa-user"></i> ${state.playerNames.p1}</span>
+            <span class="font-black text-2xl text-blue-100">${state.scores.p1} 分</span>
+          </div>
+          <div class="bg-red-900/40 border border-red-500/30 p-4 rounded-xl flex justify-between items-center mb-4">
+            <span class="font-bold text-red-300"><i class="fa-solid fa-user"></i> ${state.playerNames.p2}</span>
+            <span class="font-black text-2xl text-red-100">${state.scores.p2} 分</span>
+          </div>
+          <div class="text-center text-xl font-bold mb-4 bg-slate-800/80 p-3 rounded-lg border border-slate-600">
+            ${state.winner === 1 ? `<span class="text-blue-400">${state.playerNames.p1} 獲勝！</span>` : (state.winner === 2 ? `<span class="text-red-400">${state.playerNames.p2} 獲勝！</span>` : '<span class="text-gray-400">平手！</span>')}
+          </div>
+          <button onclick="location.reload()" class="btn-action w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-lg">重新開始</button>
+        `;
+        return;
+      }
+
+      let html = `<h2 class="text-2xl font-black flex items-center gap-2 ${pThemeText} drop-shadow-md">
+                    <i class="fa-solid fa-gamepad"></i> ${state.turn === 1 ? state.playerNames.p1 : state.playerNames.p2} 回合
+                  </h2>`;
+
+      // 準備階段
+      if (state.phase === 'SETUP_P1' || state.phase === 'SETUP_P2') {
+        html += `
+          <div class="bg-yellow-900/30 border border-yellow-600/50 p-4 rounded-xl text-center mt-2">
+            <h3 class="font-bold text-yellow-400 mb-2"><i class="fa-solid fa-map-pin"></i> 佈署階段</h3>
+            <p class="text-yellow-100/80 text-sm">請點擊己方底線(發光處)任一空地作為起點。</p>
+          </div>
+        `;
+      } 
+      // 遊戲進行中
+      else {
+        html += `
+          <div class="flex gap-4 justify-center my-2">
+            <div class="flex flex-col items-center p-3 bg-slate-800/60 rounded-xl border border-slate-600/50 shadow-inner">
+              <span class="text-xs text-slate-400 font-bold mb-1 uppercase tracking-wider">步行骰</span>
+              <div class="dice ${state.isRolling ? 'rolling' : ''} w-14 h-14 bg-gradient-to-br from-slate-200 to-slate-400 text-slate-800 rounded-lg flex items-center justify-center text-2xl font-black shadow-md border-b-4 border-slate-500">
+                ${state.dice.walk || '<i class="fa-solid fa-question text-slate-400"></i>'}
+              </div>
+            </div>
+            <div class="flex flex-col items-center p-3 bg-slate-800/60 rounded-xl border border-slate-600/50 shadow-inner">
+              <span class="text-xs text-slate-400 font-bold mb-1 uppercase tracking-wider">建築骰</span>
+              <div class="dice ${state.isRolling ? 'rolling' : ''} w-14 h-14 bg-gradient-to-br from-yellow-200 to-amber-400 text-amber-900 rounded-lg flex items-center justify-center text-2xl font-black shadow-md border-b-4 border-amber-600">
+                ${state.dice.build || '<i class="fa-solid fa-question text-amber-600/50"></i>'}
+              </div>
+            </div>
+          </div>
+        `;
+
+        if (state.phase === 'ROLL') {
+          html += `<button onclick="doRoll()" ${state.isRolling ? 'disabled' : ''} class="btn-action mt-2 w-full py-4 rounded-xl text-white font-bold text-lg ${pThemeBg}"><i class="fa-solid fa-dice"></i> ${state.isRolling ? '擲骰中...' : '擲骰'}</button>`;
+        }
+        else if (state.phase === 'CHOOSE_PHASE') {
+          html += `
+            <div class="flex flex-col gap-3 mt-2">
+              <button onclick="startMove()" class="btn-action w-full py-3 rounded-xl text-white font-bold shadow-lg ${pThemeBg}">
+                <i class="fa-solid fa-person-walking"></i> 一般行動 (移動 + 建設/破壞)
+              </button>
+              <button onclick="startCombineAttack()" ${!canCombineAction() ? 'disabled' : ''} class="btn-action w-full py-3 rounded-xl font-bold shadow-lg ${canCombineAction() ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-slate-700 text-slate-500'}">
+                <i class="fa-solid fa-bolt"></i> 合力一擊 (攻擊力: ${state.dice.walk + state.dice.build})
+              </button>
+            </div>
+          `;
+        }
+        else if (state.phase === 'MOVE') {
+          const hasMoves = getValidMoves().length > 0;
+          // 若還有步數且有路可走，則不允許略過 (必須走滿)
+          const mustWalk = state.remainingSteps > 0 && hasMoves; 
+          html += `
+            <div class="text-center mt-2 bg-slate-800/50 p-4 rounded-xl border border-slate-600">
+              <p class="text-cyan-300 font-bold mb-2">剩餘步數: <span class="text-xl mx-1 text-white">${state.remainingSteps}</span></p>
+              <p class="text-slate-400 text-sm mb-4">請依發光提示點擊移動 (需走滿步數)</p>
+              <button onclick="skipMove()" ${mustWalk ? 'disabled' : ''} class="btn-action w-full py-2 rounded-lg text-white font-bold text-sm bg-slate-600 hover:bg-slate-500 disabled:opacity-30 disabled:cursor-not-allowed">
+                ${mustWalk ? '請依指示移動...' : '無路可走 (略過)'}
+              </button>
+            </div>
+          `;
+        }
+        else if (state.phase === 'ULTIMATE_DESTROY') {
+          html += `
+            <div class="text-center flex flex-col gap-3 mt-2 bg-red-900/40 p-4 rounded-xl border border-red-500/50">
+              <h3 class="text-xl font-black text-red-400 animate-pulse"><i class="fa-solid fa-bomb"></i> 抵達終點！</h3>
+              <p class="text-red-200 text-sm">發動終極破壞：<br/>請點擊任一敵方建築將其徹底移除！</p>
+              <button onclick="skipUltimate()" class="btn-action w-full py-2 mt-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white font-bold">略過並結算</button>
+            </div>
+          `;
+        }
+        else if (state.phase === 'ACTION_SELECT') {
+          html += `
+            <div class="flex flex-col gap-3 mt-2">
+              <p class="text-slate-300 text-sm text-center bg-slate-800/50 py-2 rounded-lg"><i class="fa-solid fa-wrench"></i> 建設與重組階段</p>
+              <div class="grid grid-cols-2 gap-3">
+                <button onclick="selectAction('BUILD')" ${state.usedMainAction ? 'disabled' : ''} class="btn-action py-3 rounded-xl text-white font-bold text-sm shadow-md ${state.usedMainAction ? 'bg-slate-700 text-slate-500' : pThemeBg}">
+                  <i class="fa-solid fa-hammer"></i> 建設 (Lv ${state.dice.build})
+                </button>
+                <button onclick="selectAction('DESTROY')" ${state.usedMainAction ? 'disabled' : ''} class="btn-action py-3 rounded-xl text-white font-bold text-sm shadow-md ${state.usedMainAction ? 'bg-slate-700 text-slate-500' : 'bg-orange-600 hover:bg-orange-500'}">
+                  <i class="fa-solid fa-gavel"></i> 拆除 (Lv ≤${state.dice.build})
+                </button>
+                <button onclick="selectAction('REORGANIZE')" ${state.usedUpgrade ? 'disabled' : ''} class="btn-action col-span-2 py-3 rounded-xl text-white font-bold text-sm shadow-md ${state.usedUpgrade ? 'bg-slate-700 text-slate-500' : 'bg-indigo-600 hover:bg-indigo-500'}">
+                  <i class="fa-solid fa-object-group"></i> 建築重組 (拆分/合體)
+                </button>
+              </div>
+              <button onclick="endTurn()" class="btn-action w-full py-3 mt-2 rounded-xl bg-slate-600 hover:bg-slate-500 text-white font-black shadow-lg">結束回合</button>
+            </div>
+          `;
+        }
+        else if (state.phase === 'ACTION_EXECUTE') {
+          let desc = '';
+          if (state.actionType === 'BUILD' || state.actionType === 'REORGANIZE') desc = '點擊黃框空地蓋新建築，或點擊紫框己方建築進行拆分結合！';
+          if (state.actionType === 'DESTROY') desc = '請點擊橘框的敵方建築進行拆除。';
+          if (state.actionType === 'COMBINE') desc = '發動合力一擊！點擊粉框敵方建築。';
+
+          const pendingSize = state.pendingBuild.new.length + state.pendingBuild.existing.length;
+
+          html += `
+            <div class="text-center mt-2">
+              <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600 mb-4 shadow-inner">
+                <p class="text-slate-300 text-sm">${desc}</p>
+                ${(state.actionType === 'BUILD' || state.actionType === 'REORGANIZE') ? 
+                  `<div class="mt-2 font-bold ${pendingSize === 4 ? 'text-yellow-400' : 'text-cyan-400'}">目前已選: ${pendingSize} / 4 塊</div>` : ''}
+              </div>
+
+              ${(pendingSize > 0) ? `
+                <div class="flex gap-2 mb-3">
+                  <button onclick="finalizeBuildOrReorganize()" class="btn-action flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md"><i class="fa-solid fa-check"></i> 確認</button>
+                  <button onclick="resetPending()" class="btn-action flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold shadow-md"><i class="fa-solid fa-rotate-left"></i> 重置</button>
+                </div>
+              ` : ''}
+
+              <button onclick="cancelAction()" class="btn-action w-full py-3 rounded-xl bg-slate-600 hover:bg-slate-500 text-white font-bold shadow-md"><i class="fa-solid fa-xmark"></i> 返回 / 取消</button>
+            </div>
+          `;
+        }
+      }
+      cPanel.innerHTML = html;
+    }
+
+    function renderApp() {
+      renderBoard();
+      renderControls();
+    }
+
+    window.startGame = () => {
+      const p1Input = document.getElementById('input-p1-name').value.trim();
+      const p2Input = document.getElementById('input-p2-name').value.trim();
+      state.playerNames.p1 = p1Input || '玩家 1';
+      state.playerNames.p2 = p2Input || '玩家 2';
+      state.phase = 'SETUP_P1';
+      document.getElementById('name-input-overlay').style.display = 'none';
+      renderApp();
+    };
+
+    window.doRoll = () => {
+      state.isRolling = true;
+      renderApp();
+      setTimeout(() => {
+        state.dice.walk = rollDiceVal();
+        state.dice.build = rollDiceVal();
+        state.phase = 'CHOOSE_PHASE';
+        state.isRolling = false;
+        renderApp();
+      }, 600);
+    };
+
+    window.startMove = () => {
+      state.remainingSteps = state.dice.walk;
+      state.phase = 'MOVE';
+      renderApp();
+    };
+
+    window.startCombineAttack = () => {
+      state.phase = 'ACTION_EXECUTE';
+      state.actionType = 'COMBINE';
+      renderApp();
+    };
+
+    window.skipMove = () => {
+      state.phase = 'ACTION_SELECT';
+      state.remainingSteps = 0;
+      renderApp();
+    };
+
+    window.skipUltimate = () => {
+      calculateScores();
+    };
+
+    window.selectAction = (type) => {
+      state.phase = 'ACTION_EXECUTE';
+      state.actionType = type;
+      renderApp();
+    };
+
+    window.cancelAction = () => {
+      state.pendingBuild = { new: [], existing: [] };
+      if (state.actionType === 'COMBINE') {
+        state.phase = 'CHOOSE_PHASE';
+      } else {
+        state.phase = 'ACTION_SELECT';
+      }
+      state.actionType = null;
+      renderApp();
+    };
+
+    window.resetPending = () => {
+      state.pendingBuild = { new: [], existing: [] };
+      renderApp();
+    };
+
+    window.finalizeBuildOrReorganize = finalizeBuildOrReorganize;
+    window.endTurn = endTurn;
+
+    // 初始渲染
+    renderApp();
+  </script>
+</body>
+</html>
